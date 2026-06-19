@@ -1,0 +1,39 @@
+name: Stage Release
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  deploy_on_stag_server:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run commands on Server 1
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.TEST_HOST_1 }}
+          username: ${{ secrets.TEST_HOST_1_USERNAME }}
+          password: ${{ secrets.TEST_HOST_1_PASSWORD }}
+          port: 22
+          script: |
+            pwd
+            ls -la
+
+            cd Testing/Backend
+
+            eval "$(ssh-agent -s)"
+            ssh-add ~/.ssh/githubNew
+
+            git checkout -f develop
+            git reset --hard
+            git pull || { echo "Git pull failed"; exit 1; }
+
+            npm install --production
+            npm run lint .
+            pm2 restart API

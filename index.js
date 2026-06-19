@@ -1,0 +1,234 @@
+const Sentry = require("./instrument.js");
+require("dotenv").config();
+require("./services/emailcron");
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const AppError = require("./utils/appError");
+const errorHandler = require("./utils/errorHandler");
+const cityListingsRouter = require("./routes/cityListings");
+const listingsRouter = require("./routes/listings");
+const usersRouter = require("./routes/users");
+const favoriteRouter = require("./routes/favorites");
+const citiesRouter = require("./routes/cities");
+const villageRouter = require("./routes/village");
+const categoriesRouter = require("./routes/categories");
+const statusRouter = require("./routes/status");
+const citizenServicesRouter = require("./routes/citizenServices");
+const contactUsRouter = require("./routes/contactUs");
+const moreInfoRouter = require("./routes/moreInfo");
+const advertisement = require("./routes/ads");
+const wasteCalender = require("./routes/wasteCalender");
+const defectReportRouter = require("./routes/defectReporter");
+const fileUpload = require("express-fileupload");
+const headers = require("./middlewares/headers");
+const swaggerUi = require("swagger-ui-express");
+const apiDocumentation = require("./docs/docRoot");
+const apiVersions = require("./constants/apiVersions");
+const bridgeRoutes = require("./bridgeRoutes");
+
+// defining the Express app
+const app = express();
+app.set("trust proxy", 1);
+
+// defining an array to work as the database (temporary solution)
+const message = {
+    message: "Hello world!! Welcome to HEIDI!!",
+};
+
+// adding Helmet to enhance your Rest API's security
+app.use(helmet());
+
+// using bodyParser to parse JSON bodies into JS objects
+app.use(bodyParser.json());
+
+// enabling CORS for all requests
+app.use(cors());
+
+// adding morgan to log HTTP requests
+app.use(morgan("combined"));
+
+app.use(headers);
+
+app.use(
+    fileUpload({
+        limits: {
+            fileSize: 25000000,
+        },
+        abortOnLimit: true,
+    })
+);
+
+app.get("/", (req, res) => {
+    res.send(message);
+});
+
+for (const version in apiVersions) {
+    app.use(`/${version}`, apiVersions[version].router);
+}
+
+if (process.env.BRIDGE_ENABLED === "True") {
+    app.use("", bridgeRoutes);
+} else {
+    app.use("/users", usersRouter);
+    app.use("/cities", citiesRouter);
+    app.use("/listings", listingsRouter);
+    app.use("/categories", categoriesRouter);
+    app.use("/status", statusRouter);
+    app.use("/citizenServices", citizenServicesRouter);
+    app.use("/contactUs", contactUsRouter);
+    app.use("/moreInfo", moreInfoRouter);
+    app.get("/test", (req, res) => {
+        res.send("testing pipeline!!");
+    });
+    app.use(
+        "/users/:userId/favorites",
+        function (req, res, next) {
+            if (
+                isNaN(Number(req.params.userId)) ||
+                Number(req.params.userId) <= 0
+            ) {
+                return next(new AppError(`Invalid user id given`, 400));
+            }
+            req.paramUserId = req.params.userId;
+            next();
+        },
+        favoriteRouter
+    );
+    app.use(
+        "/cities/:cityId/villages",
+        function (req, res, next) {
+            if (
+                isNaN(Number(req.params.cityId)) ||
+                Number(req.params.cityId) <= 0
+            ) {
+                return next(new AppError(`Invalid city id given`, 400));
+            }
+            req.cityId = req.params.cityId;
+            next();
+        },
+        villageRouter
+    );
+    app.use(
+        "/cities/:cityId/listings",
+        function (req, res, next) {
+            if (
+                isNaN(Number(req.params.cityId)) ||
+                Number(req.params.cityId) <= 0
+            ) {
+                return next(new AppError(`Invalid city id given`, 400));
+            }
+            req.cityId = req.params.cityId;
+            next();
+        },
+        cityListingsRouter
+    );
+    if (process.env.WASTE_CALENDER_ENABLED === "True") {
+        app.use(
+            "/users/:userId/favorites",
+            function (req, res, next) {
+                if (
+                    isNaN(Number(req.params.userId)) ||
+                    Number(req.params.userId) <= 0
+                ) {
+                    return next(new AppError(`Invalid user id given`, 400));
+                }
+                req.paramUserId = req.params.userId;
+                next();
+            },
+            favoriteRouter
+        );
+        app.use(
+            "/cities/:cityId/villages",
+            function (req, res, next) {
+                if (
+                    isNaN(Number(req.params.cityId)) ||
+                    Number(req.params.cityId) <= 0
+                ) {
+                    return next(new AppError(`Invalid city id given`, 400));
+                }
+                req.cityId = req.params.cityId;
+                next();
+            },
+            villageRouter
+        );
+        app.use(
+            "/cities/:cityId/listings",
+            function (req, res, next) {
+                if (
+                    isNaN(Number(req.params.cityId)) ||
+                    Number(req.params.cityId) <= 0
+                ) {
+                    return next(new AppError(`Invalid city id given`, 400));
+                }
+                req.cityId = req.params.cityId;
+                next();
+            },
+            cityListingsRouter
+        );
+        if (process.env.WASTE_CALENDER_ENABLED === "True") {
+            app.use(
+                "/cities/:cityId/wasteCalender",
+                function (req, res, next) {
+                    if (
+                        isNaN(Number(req.params.cityId)) ||
+                        Number(req.params.cityId) <= 0
+                    ) {
+                        return next(new AppError(`Invalid city id given`, 400));
+                    }
+                    req.cityId = req.params.cityId;
+                    next();
+                },
+                wasteCalender
+            );
+        }
+        app.use("/ads", advertisement);
+        app.use("/reportDefect", defectReportRouter);
+    }
+}
+
+app.use("/api-docs", swaggerUi.serve);
+app.get("/api-docs", (req, res) => {
+    const documentation = apiDocumentation();
+    swaggerUi.setup(documentation)(req, res);
+});
+
+// Version-specific Swagger docs
+Object.keys(apiVersions).forEach((version) => {
+    app.use(`/api-docs/${version}`, swaggerUi.serve);
+    app.get(`/api-docs/${version}`, (req, res) => {
+        const documentation = apiDocumentation(version);
+        swaggerUi.setup(documentation)(req, res);
+    });
+});
+
+// Handle 404 for unknown API doc versions
+app.use("/api-docs/*", (req, res) => {
+    res.status(404).json({
+        status: "error",
+        message: "API documentation version not found",
+    });
+});
+
+app.all("*", (req, res, next) => {
+    next(new AppError(`The URL ${req.originalUrl} does not exists`, 404));
+});
+
+Sentry.setupExpressErrorHandler(app);
+app.use(errorHandler);
+
+// starting the server
+app.listen(process.env.PORT, () => {
+    console.log(`listening on port ${process.env.PORT}`);
+});
+
+process.on("uncaughtException", function (err) {
+    console.error(
+        `${new Date().toUTCString()}: UncaughtException: ${err.message}\n${
+            err.stack
+        }`
+    );
+    process.exit(1);
+});
