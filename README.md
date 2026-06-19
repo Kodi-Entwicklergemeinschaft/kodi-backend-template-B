@@ -54,7 +54,7 @@ Versioned API: legacy routes at the root plus `v1/` and `v2/` (current). Error t
 | Auth | RS256 JWT (key pair via env) |
 | Push | `firebase-admin` |
 | Email | `nodemailer` + templated emails |
-| Object storage | Huawei OBS (`eSDK_Storage_OBS`) for media/images |
+| Object storage | Open Telekom Cloud — OBS object storage (`eSDK_Storage_OBS`) for media/images |
 | Translation | DeepL (`DEEPL_AUTH_KEY`) |
 | Monitoring | Sentry |
 
